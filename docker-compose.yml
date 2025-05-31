@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  server:
+    build:
+      context: ./server
+    container_name: server
+    ports:
+      - "8080:8080"
+    networks:
+      - trisnet
+
+  client:
+    build:
+      context: ./client
+    container_name: client
+    depends_on:
+      - server
+    networks:
+      - trisnet
+    stdin_open: true
+    tty: true
+
+networks:
+  trisnet:
+    driver: bridge
