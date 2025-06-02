@@ -16,8 +16,6 @@
 #define USERNAME_MAX 32
 
 typedef struct Match Match;
-void *handlePlayer(void *arg);
-void deleteJoinRequestForAllPlayers(Match *match);
 
 typedef enum {
     NONE = -1,
@@ -61,7 +59,9 @@ struct Match {  // definizione completa
     MatchStatus status;
     JoinRequest requests[MAX_REQUESTS];
 };
-
+void *handlePlayer(void *arg);
+void deleteJoinRequestForAllPlayers(Match *match);
+void deleteJoinRequestForPlayer(Player *player);
 
 Match *matches[MAX_MATCH];
 pthread_mutex_t matches_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -187,6 +187,17 @@ Match *unisciti_a_partita(Match *p, Player *player) {
 
     return NULL;
 }
+
+bool checkAcceptedRequest(Player *player) {
+    for (int i = 0; i < player->num_requests; i++) {
+        if (player->requests[i].status == ACCEPTED) {
+            deleteJoinRequestForPlayer(player);
+            return true;
+        }
+    }
+    return false;
+}
+
 
 void showMatchesList(Player *player) {
     dprintf(player->client_fd, "Elenco Partite:\n");
@@ -319,7 +330,6 @@ void backToMenu(Player *player){
     pthread_t tid;
     pthread_create(&tid, NULL, handlePlayer, player);
     pthread_detach(tid);
-
 }
 
 void *handleMatch(void *arg) {
@@ -684,17 +694,36 @@ void *login(void *arg) {
 }
 
 
-void handleRequestJoinMatch(Player *player){
+int handleRequestJoinMatch(Player *player){
     dprintf(player->client_fd, "CLEAR\n");
+    showMatchesList(player);
+    dprintf(player->client_fd, "LOBBY: Inserisci l'id della partita a cui vuoi partecipare oppure -1 per tornare indietro\n");
     while(1){
-        showMatchesList(player);
-        dprintf(player->client_fd, "LOBBY: Inserisci l'id della partita a cui vuoi partecipare oppure -1 per tornare indietro\n");
+        if(checkAcceptedRequest(player)) return -1;
+        
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(player->client_fd, &fds);
+        struct timeval timeout = {1, 0}; // 1 secondo
 
+        int ready = select(player->client_fd + 1, &fds, NULL, NULL, &timeout);
+        if (ready < 0) {
+            perror("select error");
+            close(player->client_fd);
+            return -1;
+        }
+
+        if (ready == 0) {
+            // Timeout: nessun input, si ricontrolla lo stato nella prossima iterazione
+            continue;
+        }
+
+        // Dati disponibili da leggere
         char id_buf[32];
         int n = read(player->client_fd, id_buf, sizeof(id_buf) - 1);
         if (n <= 0) {
             close(player->client_fd);
-            return ;
+            return -1;
         }
 
         id_buf[n] = '\0';
@@ -703,19 +732,26 @@ void handleRequestJoinMatch(Player *player){
         if (id == -1) {
             dprintf(player->client_fd, "CLEAR\n");
             dprintf(player->client_fd, "🔙 Ritorno al menu.\n");
-            return;
+            return 0;
         }
 
         pthread_mutex_lock(&matches_mutex);
         Match *match = trova_partita(id);
         dprintf(player->client_fd, "CLEAR\n");
-        if (!match) 
+        if (!match) {
             dprintf(player->client_fd, "ERROR: La partita non esiste, riprova\n");
-        else 
+            showMatchesList(player);
+            dprintf(player->client_fd, "LOBBY: Inserisci l'id della partita a cui vuoi partecipare oppure -1 per tornare indietro\n");
+        }
+        else {
             addJoinRequest(match, player);
+            showMatchesList(player);
+            dprintf(player->client_fd, "LOBBY: Inserisci l'id della partita a cui vuoi partecipare oppure -1 per tornare indietro\n");
+        }
              
         pthread_mutex_unlock(&matches_mutex);
     }
+    return 0;
 }
 
 void printMenu(int client_fd){
@@ -750,24 +786,16 @@ void *handlePlayer(void *arg) { //funzione che gestisce il player quando si trov
         int ready = select(player->client_fd + 1, &read_fds, NULL, NULL, &timeout);
         if (ready < 0) {                //Se select() ritorna un valore negativo, c'è stato un errore.
             perror("select error");     //stampo l'errore.
-                 //gestisce tutto ciò che deve avvenire quando un giocatore si disconnette
-                       //chiudo il socket.
             return NULL;                   //esco dalla funzione/thread
         }
 
         //Se questo player ha una richiesta di una partita accettata esco dal menu, in modo che handleGame lo gestisca
-        for (int i = 0; i < player->num_requests; i++) 
-            if (player->requests[i].status == ACCEPTED) {
-                deleteJoinRequestForPlayer(player);     //Cancello le richieste che il player ha fatto per altre partite
-                return NULL;
-            }
+        if (checkAcceptedRequest(player)) return NULL;
         
         //Controllo se c'è qualcosa da leggere
         if (ready > 0 && FD_ISSET(player->client_fd, &read_fds)) {
             int n = read(player->client_fd, buffer, BUFFER_SIZE - 1);       //Legge il BUFFER_SIZE dal socket e li mette in buffer.
             if (n <= 0) {                           //Se n == 0, il client ha chiuso la connessione. Se n < 0, c'è stato un errore di lettura.
-                     //gestisce tutto ciò che deve avvenire quando un giocatore si disconnette 
-                           //chiudo il socket.
                 return NULL;                        //esco dalla funzione/thread
             }
 
@@ -779,7 +807,7 @@ void *handlePlayer(void *arg) { //funzione che gestisce il player quando si trov
                 crea_partita(player);
                 printMenu(player->client_fd);
             } else if (strstr(buffer, "partecipa") || strstr(buffer, "2")) {    //se l'utente inserisce partecipa/2 chiama il metodo per gestire
-                handleRequestJoinMatch(player);                                 //le richieste di partecipazione e poi ristampa il menu
+                if(handleRequestJoinMatch(player) == -1) return NULL;                                 //le richieste di partecipazione e poi ristampa il menu
                 printMenu(player->client_fd);   
             } else if (strstr(buffer, "richieste") || strstr(buffer, "3")) {    //se l'utente inserisce richieste/3 mostro le richieste che i giocatori
                                                                                 //hanno fatto per le sue partite
