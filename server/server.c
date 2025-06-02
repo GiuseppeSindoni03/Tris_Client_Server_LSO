@@ -94,6 +94,7 @@ bool ask_continue(int client_fd) {
 
 void reset_match (Match* p) {
     initBoard(p);
+    p->status = WAITING;
     p->turno = 1;
 
 }
@@ -275,6 +276,11 @@ void handlePlayerDisconnect(Player *player){    //Viene chiamato alla disconness
 
 bool addJoinRequest(Match *match, Player *player) {
 
+    if(match->player1 == player){
+        dprintf(player->client_fd, "ERROR: Puoi richiedere l'accesso solo alle partite di altri giocatori \n");
+        return false;
+    }
+
     if(match->status != WAITING){
         dprintf(player->client_fd, "ERROR: Puoi richiedere l'accesso solo alle partite in attesa \n");
         return false;
@@ -397,6 +403,7 @@ void *handleMatch(void *arg) {
             backToMenu(loser);
 
             if(ask_continue(current_fd)) {
+                dprintf(current_fd, "INFO: La partita è stata resettata, attendi nuovi giocatori!\n");
                 reset_match(p);
                 p->player1 = winner;
                 p->player2 = NULL;
@@ -759,7 +766,7 @@ void printMenu(int client_fd){
         "Puoi digitare uno dei seguenti comandi:\n"
         " 1) crea\n"
         " 2) partecipa\n"
-        " 3) richieste proprie partite\n"
+        " 3) gestisci le tue partite\n"
         " 4) richieste di partecipazione\n"
         "LOBBY: In attesa del tuo comando...\n");
 }
@@ -803,13 +810,13 @@ void *handlePlayer(void *arg) { //funzione che gestisce il player quando si trov
             buffer[strcspn(buffer, "\n")] = '\0';   //rimuove \n alla fine della stringa, sostituendolo con \0.
 
             // 🔄 Comandi utente
-            if (strstr(buffer, "crea")) {       //se l'utente inserisce crea, creo la partita e ristampo il menu
+            if (strstr(buffer, "crea") || strstr(buffer, "1")) {       //se l'utente inserisce crea, creo la partita e ristampo il menu
                 crea_partita(player);
                 printMenu(player->client_fd);
             } else if (strstr(buffer, "partecipa") || strstr(buffer, "2")) {    //se l'utente inserisce partecipa/2 chiama il metodo per gestire
                 if(handleRequestJoinMatch(player) == -1) return NULL;                                 //le richieste di partecipazione e poi ristampa il menu
                 printMenu(player->client_fd);   
-            } else if (strstr(buffer, "richieste") || strstr(buffer, "3")) {    //se l'utente inserisce richieste/3 mostro le richieste che i giocatori
+            } else if (strstr(buffer, "gestisci") || strstr(buffer, "3")) {    //se l'utente inserisce richieste/3 mostro le richieste che i giocatori
                                                                                 //hanno fatto per le sue partite
                 int matchId = handleRequest(player);                  //gestisce l'il player durante la fase di accettazione delle richieste
                 if (matchId != -1) {
@@ -820,11 +827,11 @@ void *handlePlayer(void *arg) { //funzione che gestisce il player quando si trov
                     return NULL;
                 }
                 printMenu(player->client_fd);
-            } else if (strstr(buffer, "4")) {
+            } else if (strstr(buffer, "richieste") || strstr(buffer, "4")) {
                 printMyRequests(player);
                 printMenu(player->client_fd);
             } else {
-                dprintf(player->client_fd, "ERROR: Comando non valido. Riprova (crea / partecipa / richieste)\n");
+                dprintf(player->client_fd, "ERROR: Comando non valido. Riprova (1 crea / 2 partecipa / 3 gestisci / 4 richieste)\n");
             }
         }
     }
