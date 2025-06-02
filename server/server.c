@@ -53,7 +53,7 @@ struct Match {  // definizione completa
     int id;
     Player *player1;
     Player *player2;
-    int turno;
+    int turn;
     char board[3][3];
 
     MatchStatus status;
@@ -76,7 +76,7 @@ void initBoard(Match *p) {
             p->board[i][j] = ' ';
 }
 
-bool ask_continue(int client_fd) {
+bool askContinue(int client_fd) {
     char buffer[BUFFER_SIZE];
     dprintf(client_fd, "LOBBY: Vuoi giocare un'altra partita? (si/no)\n");
 
@@ -92,14 +92,14 @@ bool ask_continue(int client_fd) {
     return 0;
 }
 
-void reset_match (Match* p) {
+void resetMatch (Match* p) {
     initBoard(p);
     p->status = WAITING;
-    p->turno = 1;
+    p->turn = 1;
 
 }
 
-MatchStatus check_status(Match *p) {
+MatchStatus checkStatus(Match *p) {
     char (*b)[3] = p->board;
 
     for (int i = 0; i < 3; i++) {
@@ -151,14 +151,14 @@ void deleteMatch(Match *p) {
     pthread_mutex_unlock(&matches_mutex);
 }
 
-Match *trova_partita(int id) {
+Match *findMatch(int id) {
     if (matches[id]) //verifico che non sia nullo
         return matches[id];
     
     return NULL;
 }
 
-void crea_partita(Player *player) { //gestire caso se non ci sono spazi nell'array
+void createMatch(Player *player) { //gestire caso se non ci sono spazi nell'array
     pthread_mutex_lock(&matches_mutex);
     for (int i = 0; i < MAX_MATCH; i++) {
         if (!matches[i]) {
@@ -167,7 +167,7 @@ void crea_partita(Player *player) { //gestire caso se non ci sono spazi nell'arr
             p->id = i;
             p->player1 = player;
             p->player2 = NULL;
-            p->turno = 1;
+            p->turn = 1;
             p->status = WAITING;
             matches[i] = p;
 
@@ -178,15 +178,6 @@ void crea_partita(Player *player) { //gestire caso se non ci sono spazi nell'arr
     }
     pthread_mutex_unlock(&matches_mutex);
     return;
-}
-
-Match *unisciti_a_partita(Match *p, Player *player) {
-    if (p->player2 == NULL) {
-        p->player2 = player;
-        return p;
-    }
-
-    return NULL;
 }
 
 bool checkAcceptedRequest(Player *player) {
@@ -225,7 +216,7 @@ void deleteJoinRequestForAllPlayers(Match *match){  //Elimina tutte le richieste
         if (!players[i]) continue;
 
         for(int j=0; j<players[i]->num_requests; j++)
-            if(players[i]->requests[j].match==match){
+            if(players[i]->requests[j].match == match){
                 for(int k=j; k<players[i]->num_requests-1; k++)
                     players[i]->requests[k]= players[i]->requests[k+1];
 
@@ -324,8 +315,8 @@ bool addJoinRequest(Match *match, Player *player) {
 }
 
 void handlePlayerLeavingMatch(Match *p){
-        Player *current = (p->turno == 1) ? p->player1 : p->player2;
-        Player *other = (p->turno == 1) ? p->player2 : p->player1;
+        Player *current = (p->turn == 1) ? p->player1 : p->player2;
+        Player *other = (p->turn == 1) ? p->player2 : p->player1;
         dprintf(other->client_fd, "INFO: L'altro giocatore ha lasciato la partita. Hai vinto, la partità verrà eliminata.\n");
         pthread_t tid;
         pthread_create(&tid, NULL, handlePlayer, other);
@@ -347,13 +338,13 @@ void *handleMatch(void *arg) {
     dprintf(p->player2->client_fd, "INFO: Connesso! Attendi il tuo turno...\n");
 
     while (1) {
-        int current_fd = (p->turno == 1) ? p->player1->client_fd : p->player2->client_fd;
-        int other_fd   = (p->turno == 1) ? p->player2->client_fd : p->player1->client_fd;
+        int current_fd = (p->turn == 1) ? p->player1->client_fd : p->player2->client_fd;
+        int other_fd   = (p->turn == 1) ? p->player2->client_fd : p->player1->client_fd;
 
         dprintf(current_fd, "TURN: Tocca a te, inserisci riga e colonna (es. 1 2): \n");
         int n = read(current_fd, buffer, BUFFER_SIZE - 1);
         if (n <= 0) {
-            Player *current = (p->turno == 1) ? p->player1 : p->player2;
+            Player *current = (p->turn == 1) ? p->player1 : p->player2;
             handlePlayerLeavingMatch(p);
             
             break;
@@ -363,7 +354,7 @@ void *handleMatch(void *arg) {
         buffer[strcspn(buffer, "\n")] = '\0';  
 
         if (strcmp(buffer, "exit") == 0) {
-            Player *current = (p->turno == 1) ? p->player1 : p->player2;
+            Player *current = (p->turn == 1) ? p->player1 : p->player2;
             handlePlayerLeavingMatch(p);
             
             break;
@@ -383,12 +374,12 @@ void *handleMatch(void *arg) {
             continue;
         }
 
-        p->board[row][col] = (p->turno == 1) ? 'X' : 'O';
+        p->board[row][col] = (p->turn == 1) ? 'X' : 'O';
 
         // Invio griglia aggiornata a entrambi
         sendBoard(p->player1->client_fd, p);
         sendBoard(p->player2->client_fd, p);
-        MatchStatus status = check_status(p);
+        MatchStatus status = checkStatus(p);
 
         if (status == VICTORY) {
             // gestisci fine partita e caso di vittoria:
@@ -398,13 +389,13 @@ void *handleMatch(void *arg) {
 
             dprintf(current_fd, "Complimenti hai vinto la partita!\n");
             dprintf(other_fd, "Mi dispiace hai perso\n");
-            Player *winner = (p->turno == 1) ? p->player1 : p->player2;
-            Player *loser = (p->turno == 1) ? p->player2 : p->player1;
+            Player *winner = (p->turn == 1) ? p->player1 : p->player2;
+            Player *loser = (p->turn == 1) ? p->player2 : p->player1;
             backToMenu(loser);
 
-            if(ask_continue(current_fd)) {
+            if(askContinue(current_fd)) {
                 dprintf(current_fd, "INFO: La partita è stata resettata, attendi nuovi giocatori!\n");
-                reset_match(p);
+                resetMatch(p);
                 p->player1 = winner;
                 p->player2 = NULL;
                 backToMenu(winner);
@@ -424,8 +415,8 @@ void *handleMatch(void *arg) {
             dprintf(current_fd, "Avete pareggiato!\n");
             dprintf(other_fd, "Avete pareggiato!\n");
 
-            if(ask_continue(current_fd) && ask_continue(other_fd)) {
-                reset_match(p);
+            if(askContinue(current_fd) && askContinue(other_fd)) {
+                resetMatch(p);
                 continue;
             }
            else {
@@ -439,7 +430,7 @@ void *handleMatch(void *arg) {
             dprintf(other_fd, "INFO: L'avversario ha giocato in riga %d, colonna %d\n", row + 1, col + 1);
         }
 
-        p->turno = (p->turno == 1) ? 2 : 1;
+        p->turn = (p->turn == 1) ? 2 : 1;
     }
 
     deleteMatch(p);
@@ -497,7 +488,7 @@ void printMyRequests(Player *player){
         return ;
     }
 
-    for(int i=0; i<player->num_requests; i++)
+    for(int i=0; i < player->num_requests; i++)
         if(player->requests[i].status == PENDING)
             dprintf(player->client_fd, " - Partita ID: %d, Proprietario: %s, Stato: IN ATTESA \n",player->requests[i].match->id ,player->requests[i].match->player1->username);
         else if (player->requests[i].status == REJECTED)
@@ -743,7 +734,7 @@ int handleRequestJoinMatch(Player *player){
         }
 
         pthread_mutex_lock(&matches_mutex);
-        Match *match = trova_partita(id);
+        Match *match = findMatch(id);
         dprintf(player->client_fd, "CLEAR\n");
         if (!match) {
             dprintf(player->client_fd, "ERROR: La partita non esiste, riprova\n");
@@ -811,7 +802,7 @@ void *handlePlayer(void *arg) { //funzione che gestisce il player quando si trov
 
             // 🔄 Comandi utente
             if (strstr(buffer, "crea") || strstr(buffer, "1")) {       //se l'utente inserisce crea, creo la partita e ristampo il menu
-                crea_partita(player);
+                createMatch(player);
                 printMenu(player->client_fd);
             } else if (strstr(buffer, "partecipa") || strstr(buffer, "2")) {    //se l'utente inserisce partecipa/2 chiama il metodo per gestire
                 if(handleRequestJoinMatch(player) == -1) return NULL;                                 //le richieste di partecipazione e poi ristampa il menu
