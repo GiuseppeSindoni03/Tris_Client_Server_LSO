@@ -6,4 +6,5 @@ COPY client.c .
 
 RUN gcc client.c -o client
 
-CMD ["./client"]
+CMD ["tail", "-f", "/dev/null"]
+

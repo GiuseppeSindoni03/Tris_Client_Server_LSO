@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   server:
     build:
@@ -7,8 +5,13 @@ services:
     container_name: server
     ports:
       - "8080:8080"
+    volumes:
+      - ./server:/app
+    command: bash   # 👈 evita di eseguire ./server all'avvio
     networks:
       - trisnet
+    stdin_open: true
+    tty: true
 
   client:
     build:
@@ -16,11 +19,14 @@ services:
     container_name: client
     depends_on:
       - server
+    volumes:
+      - ./client:/app
+    command: bash   # 👈 evita crash se ./client non ancora compilato
     networks:
       - trisnet
     stdin_open: true
     tty: true
-
+    
 networks:
   trisnet:
     driver: bridge
