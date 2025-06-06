@@ -1,4 +1,3 @@
-// === client.c ===
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,7 +76,7 @@ int main() {
         int max_fd = (sock > STDIN_FILENO) ? sock : STDIN_FILENO; // Calcola il valore massimo dei file descriptor necessario per select
 
         struct timeval timeout = {1, 0};  // 1 secondo
-        int ready = select(max_fd + 1, &read_fds, NULL, NULL, &timeout); // Aspetta fino a 1 secondo per vedere se il socket e' pronto per leggere qualcosa
+        int ready = select(max_fd + 1, &read_fds, NULL, NULL, &timeout); // Aspetta fino a 1 secondo per vedere se il socket è pronto per leggere qualcosa
         if (ready < 0) {
             perror("❌ Errore select");
             break;

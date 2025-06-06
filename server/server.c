@@ -12,7 +12,7 @@
 #include <sys/select.h>
 
 
-// Inizializzazione strutture dati condivise
+// Dichiarazione strutture dati condivise
 Match *matches[MAX_MATCH];
 pthread_mutex_t matches_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -69,18 +69,18 @@ MatchStatus checkStatus(Match *p) {
     if (b[0][2] != ' ' && b[0][2] == b[1][1] && b[1][1] == b[2][0])
         return VICTORY;
 
-    //  controlla se la griglia e' piena   
+    //  controlla se la griglia è piena   
     int full = 1;
     for (int i = 0; i < 3 && full; i++)
         for (int j = 0; j < 3 && full; j++)
             if (b[i][j] == ' ')
                 full = 0;
 
-    // se e' piena e' un pareggio
+    // se è piena è un pareggio
     if (full)
         return DRAW;
 
-    // la partita non e' ancora terminata
+    // la partita non è ancora terminata
     return IN_PROGRESS;
 }
 
@@ -97,8 +97,8 @@ void sendBoard(int fd, Match *p) {
 
 // Elimina una partita dall'elenco condiviso
 void deleteMatch(Match *p) {
-    pthread_mutex_lock(&matches_mutex); // blocca momentaneamente l'accesso a tale risolrsa
-    deleteJoinRequestForAllPlayers(p); // elimina tutte le richieste di accesso a tale partita
+    pthread_mutex_lock(&matches_mutex); // blocca momentaneamente l'accesso a tale risorsa
+    deleteJoinRequestForAllPlayers(p); // elimina tutte le richieste di accesso a tale partita 
     for (int i = 0; i < MAX_MATCH; i++) { 
         if (matches[i] == p) {
             matches[i] = NULL; // rimuove tale partita dalla struttura
@@ -197,13 +197,13 @@ void handlePlayerDisconnect(Player *player){
     pthread_mutex_lock(&players_mutex); 
     pthread_mutex_lock(&matches_mutex);
     for(int i=0; i< MAX_MATCH; i++){            //Elimina le partite di cui il giocatore è proprietario e tutti le richieste che i giocatori 
-        if(matches[i]){ 
-            if(matches[i]->player1==player){   //hanno fatto per quelle partite
+        if(matches[i]){                         //hanno fatto per quelle partite
+            if(matches[i]->player1==player){   
                 deleteJoinRequestForAllPlayers(matches[i]); // elimina tutte le richieste di accesso a tale partita
                 free(matches[i]);
                 matches[i]= NULL;
             }else{
-                 for(int j=0; j<MAX_REQUESTS; j++)  //Controlla se ci sono delle richieste in questa partita dal player che si sta disconnetendo
+                 for(int j=0; j<MAX_REQUESTS; j++)  //Controlla se ci sono delle richieste in questa partita (indice i) dal player che si sta disconnetendo
                      if(matches[i]->requests[j].player == player){
                         matches[i]->requests[j].player = NULL;
                         matches[i]->requests[j].status = -1;
