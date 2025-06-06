@@ -2,4 +2,5 @@
 client
 
 # server/.gitignore
-server
+/server     # ignora solo il file binario nella cartella
+*.o         # ignora file oggetto
