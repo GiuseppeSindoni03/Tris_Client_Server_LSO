@@ -1,32 +1,23 @@
 services:
   server:
-    build:
-      context: ./server
+    build: ./server
     container_name: server
     ports:
       - "8080:8080"
-    volumes:
-      - ./server:/app
-    command: bash   # 👈 evita di eseguire ./server all'avvio
     networks:
       - trisnet
-    stdin_open: true
-    tty: true
 
   client:
-    build:
-      context: ./client
+    build: ./client
     container_name: client
     depends_on:
       - server
-    volumes:
-      - ./client:/app
-    command: bash   # 👈 evita crash se ./client non ancora compilato
     networks:
       - trisnet
+    command: bash
     stdin_open: true
     tty: true
-    
+
 networks:
   trisnet:
     driver: bridge

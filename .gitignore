@@ -1,0 +1,5 @@
+# client/.gitignore
+client
+
+# server/.gitignore
+server
